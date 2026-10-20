@@ -1,0 +1,86 @@
+services:
+  homer:
+    image: ghcr.io/manomanotech/homer:v2.3.0
+    container_name: homer
+    restart: unless-stopped
+    ports:
+      - "${HOMER_PORT:-3000}:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./homer-plugins/release/simpleReleaseManager.js:/app/dist/plugins/release/simpleReleaseManager.js:ro
+      - ./homer-config/projects.json:/app/dist/config/homer/projects.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/monitoring/healthcheck', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: homer-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-homer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE_NAME:-homer}
+    volumes:
+      - homer-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-homer} -d ${POSTGRES_DATABASE_NAME:-homer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: homer-gitlab
+    restart: unless-stopped
+    hostname: localhost
+    shm_size: 256m
+    ports:
+      - "8929:8929"
+    environment:
+      GITLAB_ROOT_PASSWORD: ${GITLAB_ROOT_PASSWORD}
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8929'
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
+    volumes:
+      - homer-gitlab-config:/etc/gitlab
+      - homer-gitlab-logs:/var/log/gitlab
+      - homer-gitlab-data:/var/opt/gitlab
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8929/-/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: homer-gitlab-runner
+    restart: unless-stopped
+    depends_on:
+      - gitlab
+    volumes:
+      - homer-gitlab-runner-config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+
+# Fixed name so CI job containers can join it (runner --docker-network-mode)
+# whatever folder the repository is cloned into.
+networks:
+  default:
+    name: homer-network
+
+volumes:
+  homer-postgres-data:
+  homer-gitlab-config:
+  homer-gitlab-logs:
+  homer-gitlab-data:
+  homer-gitlab-runner-config:

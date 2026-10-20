@@ -1,0 +1,14 @@
+{
+  "projects": [
+    {
+      "description": "my sample project",
+      "notificationChannelIds": [
+        "C0123456789"
+      ],
+      "projectId": 1,
+      "releaseChannelId": "C0123456789",
+      "releaseManager": "simpleReleaseManager",
+      "releaseTagManager": "stableDateReleaseTagManager"
+    }
+  ]
+}

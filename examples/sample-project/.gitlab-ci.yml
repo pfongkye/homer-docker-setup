@@ -1,0 +1,57 @@
+# Sample pipeline to exercise Homer's release flow against the local
+# dockerized GitLab CE instance.
+#
+# Homer's release manager only cares about one thing structurally:
+# a job on the default branch pipeline named exactly one of
+# 'Build Image' | 'Build with KO' | 'build-application' | 'build_ecs_image' | 'build_image'
+# reaching status "success" (see plugins/release/defaultReleaseManager.ts
+# and our homer-plugins/release/simpleReleaseManager.js, which look this up
+# via the GitLab Jobs API). The job name below is chosen to match that list.
+
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  script:
+    - echo "Running unit tests..."
+    - echo "All tests passed."
+
+build_image:
+  stage: build
+  # Job name must stay exactly "build_image" — it's the one Homer's release
+  # manager pattern-matches on to decide "the release is ready to ship".
+  script:
+    - echo "Building application image..."
+    - sleep 30 # simulate build time
+    - echo "Image built and tagged $CI_COMMIT_SHORT_SHA"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# deploy_staging/deploy_prd only run on tag pipelines (i.e. once Homer has
+# created the release tag), not on every merge to the default branch.
+deploy_staging:
+  stage: deploy
+  environment:
+    name: staging
+  script:
+    - echo "Deploying $CI_COMMIT_TAG to staging..."
+    - echo "Staging deployment complete."
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual
+
+deploy_prd:
+  stage: deploy
+  environment:
+    name: production
+  needs:
+    - deploy_staging
+  script:
+    - echo "Deploying $CI_COMMIT_TAG to production..."
+    - echo "Production deployment complete."
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual

@@ -1,0 +1,4 @@
+.env
+homer-config/projects.json
+config.toml
+.DS_Store
